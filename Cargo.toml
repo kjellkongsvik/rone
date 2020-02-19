@@ -1,0 +1,10 @@
+[package]
+name = "rocket_jwt"
+version = "0.1.0"
+authors = ["Kjell W. Kongsvik <kjell.kongsvik@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+rocket = { git = "https://github.com/SergioBenitez/Rocket", branch = "async" }
+jsonwebtoken = "7"
+serde = {version = "1", features = ["derive"] }
