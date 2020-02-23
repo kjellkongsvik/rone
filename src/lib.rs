@@ -6,7 +6,9 @@ use rocket::{Outcome, State};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
-pub struct TokenSecret(pub String);
+pub struct Decoding<'a> {
+    pub hs256: DecodingKey<'a>,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -23,16 +25,16 @@ impl<'a, 'r> FromRequest<'a, 'r> for JWT {
         request: &'a Request<'r>,
     ) -> request::Outcome<Self, Self::Error> {
         let secret = request
-            .guard::<State<TokenSecret>>()
+            .guard::<State<Decoding>>()
             .await
             .unwrap()
-            .0
+            .hs256
             .clone();
         let keys: Vec<_> = request.headers().get("Authorization").collect();
         match keys.len() {
             1 => match decode::<Claims>(
                 &keys[0].trim_start_matches("Bearer "),
-                &DecodingKey::from_secret(secret.as_ref()),
+                &secret,
                 &Validation::default(),
             ) {
                 Ok(_) => Outcome::Success(JWT("".to_string())),
