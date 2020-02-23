@@ -62,7 +62,7 @@ mod tests {
 
     #[rocket::async_test]
     async fn test_200() {
-        let header = Header::new("Authorization", jwt());
+        let header = Header::new("Authorization", "Bearer ".to_owned() + &jwt());
         let client = Client::new(rocket().attach(manage_token_secret())).unwrap();
         let response = client.get("/").header(header).dispatch().await;
         assert_eq!(response.status(), Status::Ok);

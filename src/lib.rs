@@ -31,7 +31,7 @@ impl<'a, 'r> FromRequest<'a, 'r> for JWT {
         let keys: Vec<_> = request.headers().get("Authorization").collect();
         match keys.len() {
             1 => match decode::<Claims>(
-                &keys[0],
+                &keys[0].trim_start_matches("Bearer "),
                 &DecodingKey::from_secret(secret.as_ref()),
                 &Validation::default(),
             ) {
