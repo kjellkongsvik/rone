@@ -2,6 +2,10 @@
 use rocket::fairing::AdHoc;
 use rocket::{get, routes, Rocket};
 use rocket_jwt::{TokenSecret, JWT};
+use std::env;
+
+#[macro_use]
+extern crate lazy_static;
 
 #[get("/")]
 fn index(_jwt: JWT) -> String {
@@ -13,13 +17,13 @@ fn rocket() -> Rocket {
 }
 
 fn main() -> Result<(), rocket::error::Error> {
+    lazy_static! {
+        static ref SECRET_KEY: String =
+            env::var("SECRET_KEY").expect("SECRET_KEY in env");
+    }
     rocket()
         .attach(AdHoc::on_attach("TokenSecret", |r| {
-            let token_val = match r.config().get_string("token_secret") {
-                Ok(t) => t,
-                _ => return Err(r),
-            };
-            Ok(r.manage(TokenSecret(token_val)))
+            Ok(r.manage(TokenSecret(SECRET_KEY.to_string())))
         }))
         .launch()
 }
@@ -34,7 +38,10 @@ mod tests {
     use rocket_jwt::Claims;
 
     fn secret_key() -> String {
-        "very_secret".to_string()
+        lazy_static! {
+            static ref TOKEN_SECRET: String = "very_secret".to_string();
+        }
+        TOKEN_SECRET.to_string()
     }
 
     fn jwt() -> String {

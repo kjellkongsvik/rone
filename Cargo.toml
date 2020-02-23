@@ -8,3 +8,4 @@ edition = "2018"
 rocket = { git = "https://github.com/SergioBenitez/Rocket", branch = "async" }
 jsonwebtoken = "7"
 serde = {version = "1", features = ["derive"] }
+lazy_static="1"
