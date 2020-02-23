@@ -45,12 +45,15 @@ impl<'a, 'r> FromRequest<'a, 'r> for JWT {
             }
         };
 
-        let secret = request
-            .guard::<State<Decoding>>()
-            .await
-            .unwrap()
-            .hs256
-            .clone();
+        let secret = match request.guard::<State<Decoding>>().await {
+            Outcome::Success(s) => s.hs256.to_owned(),
+            _ => {
+                return Outcome::Failure((
+                    Status::InternalServerError,
+                    ErrorKind::__Nonexhaustive,
+                ))
+            }
+        };
 
         match decode::<Claims>(&token, &secret, &Validation::default()) {
             Ok(_) => Outcome::Success(JWT(())),
