@@ -17,6 +17,17 @@ pub struct Claims {
 
 pub struct JWT(());
 
+fn bearer(r: &Request) -> Option<String> {
+    let k: Vec<_> = r.headers().get("Authorization").collect();
+    if k.len() == 1 {
+        let mut it = k[0].split(' ');
+        if Some("Bearer") == it.next() {
+            return it.next().and_then(|t| Some(t.into()));
+        }
+    }
+    None
+}
+
 #[rocket::async_trait]
 impl<'a, 'r> FromRequest<'a, 'r> for JWT {
     type Error = jsonwebtoken::errors::ErrorKind;
@@ -24,23 +35,26 @@ impl<'a, 'r> FromRequest<'a, 'r> for JWT {
     async fn from_request(
         request: &'a Request<'r>,
     ) -> request::Outcome<Self, Self::Error> {
+        let token = match bearer(request) {
+            Some(t) => t,
+            None => {
+                return Outcome::Failure((
+                    Status::Unauthorized,
+                    ErrorKind::InvalidToken,
+                ))
+            }
+        };
+
         let secret = request
             .guard::<State<Decoding>>()
             .await
             .unwrap()
             .hs256
             .clone();
-        let keys: Vec<_> = request.headers().get("Authorization").collect();
-        match keys.len() {
-            1 => match decode::<Claims>(
-                &keys[0].trim_start_matches("Bearer "),
-                &secret,
-                &Validation::default(),
-            ) {
-                Ok(_) => Outcome::Success(JWT(())),
-                Err(e) => Outcome::Failure((Status::Unauthorized, e.into_kind())),
-            },
-            _ => Outcome::Failure((Status::Unauthorized, ErrorKind::InvalidToken)),
+
+        match decode::<Claims>(&token, &secret, &Validation::default()) {
+            Ok(_) => Outcome::Success(JWT(())),
+            Err(e) => Outcome::Failure((Status::Unauthorized, e.into_kind())),
         }
     }
 }
