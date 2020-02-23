@@ -15,7 +15,7 @@ pub struct Claims {
     pub exp: usize,
 }
 
-pub struct JWT(String);
+pub struct JWT(());
 
 #[rocket::async_trait]
 impl<'a, 'r> FromRequest<'a, 'r> for JWT {
@@ -37,7 +37,7 @@ impl<'a, 'r> FromRequest<'a, 'r> for JWT {
                 &secret,
                 &Validation::default(),
             ) {
-                Ok(_) => Outcome::Success(JWT("".to_string())),
+                Ok(_) => Outcome::Success(JWT(())),
                 Err(e) => Outcome::Failure((Status::Unauthorized, e.into_kind())),
             },
             _ => Outcome::Failure((Status::Unauthorized, ErrorKind::InvalidToken)),
