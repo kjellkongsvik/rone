@@ -5,6 +5,8 @@ use rocket::{get, routes, Rocket};
 use rocket_jwt::{Decoding, JWT};
 use std::env;
 
+mod jwks;
+
 #[macro_use]
 extern crate lazy_static;
 
@@ -16,7 +18,7 @@ fn index(_jwt: JWT) -> String {
 fn rocket(s: &'static [u8]) -> Rocket {
     rocket::ignite()
         .mount("/", routes![index])
-        .attach(AdHoc::on_attach("SecretKey", move |r| {
+        .attach(AdHoc::on_attach("DecodingKey", move |r| {
             Ok(r.manage(Decoding {
                 hs256: DecodingKey::from_secret(s),
             }))
@@ -68,9 +70,12 @@ mod tests {
 
     #[rocket::async_test]
     async fn test_200() {
-        let header = Header::new("Authorization", "Bearer ".to_owned() + &jwt());
         let client = Client::new(rocket(secret_key())).unwrap();
-        let response = client.get("/").header(header).dispatch().await;
+        let response = client
+            .get("/")
+            .header(Header::new("Authorization", "Bearer ".to_owned() + &jwt()))
+            .dispatch()
+            .await;
         assert_eq!(response.status(), Status::Ok);
     }
 }

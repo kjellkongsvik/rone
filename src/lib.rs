@@ -45,7 +45,7 @@ impl<'a, 'r> FromRequest<'a, 'r> for JWT {
             }
         };
 
-        let secret = match request.guard::<State<Decoding>>().await {
+        let decoding_key = match request.guard::<State<Decoding>>().await {
             Outcome::Success(s) => s.hs256.to_owned(),
             _ => {
                 return Outcome::Failure((
@@ -55,7 +55,7 @@ impl<'a, 'r> FromRequest<'a, 'r> for JWT {
             }
         };
 
-        match decode::<Claims>(&token, &secret, &Validation::default()) {
+        match decode::<Claims>(&token, &decoding_key, &Validation::default()) {
             Ok(_) => Outcome::Success(JWT(())),
             Err(e) => Outcome::Failure((Status::Unauthorized, e.into_kind())),
         }
