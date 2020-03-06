@@ -1,11 +1,11 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 use jsonwebtoken::DecodingKey;
+use jwt::{Decoding, JWT};
 use rocket::fairing::AdHoc;
 use rocket::{get, routes, Rocket};
-use rocket_jwt::{Decoding, JWT};
 use std::env;
-
-mod jwks;
+mod jwt;
+mod openid;
 
 #[macro_use]
 extern crate lazy_static;
@@ -15,20 +15,20 @@ fn index(_jwt: JWT) -> String {
     "".to_owned()
 }
 
-fn rocket(s: &'static [u8]) -> Rocket {
+fn rocket(secret_key: &'static [u8]) -> Rocket {
     rocket::ignite()
         .mount("/", routes![index])
         .attach(AdHoc::on_attach("DecodingKey", move |r| {
             Ok(r.manage(Decoding {
-                hs256: DecodingKey::from_secret(s),
+                hs256: DecodingKey::from_secret(secret_key),
             }))
         }))
 }
 
 fn main() -> Result<(), rocket::error::Error> {
     lazy_static! {
-        static ref SECRET_KEY: String =
-            env::var("SECRET_KEY").expect("SECRET_KEY in env");
+        static ref SECRET_KEY: String = env::var("SECRET_KEY").expect("SECRET_KEY in env");
+        static ref rsakeys: Vec<openid::Keys> = openid::en("some.uri").unwrap();
     }
     rocket(SECRET_KEY.as_ref()).launch()
 }
@@ -38,9 +38,9 @@ mod tests {
     use super::*;
     use jsonwebtoken::Header as jwtHeader;
     use jsonwebtoken::{encode, EncodingKey};
+    use jwt::Claims;
     use rocket::http::{Header, Status};
     use rocket::local::Client;
-    use rocket_jwt::Claims;
 
     fn secret_key() -> &'static [u8] {
         lazy_static! {

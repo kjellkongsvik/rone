@@ -22,7 +22,7 @@ fn bearer(r: &Request) -> Option<String> {
     if k.len() == 1 {
         let mut it = k[0].split(' ');
         if Some("Bearer") == it.next() {
-            return it.next().and_then(|t| Some(t.into()));
+            return it.next().map(|t| t.into());
         }
     }
     None
@@ -32,26 +32,16 @@ fn bearer(r: &Request) -> Option<String> {
 impl<'a, 'r> FromRequest<'a, 'r> for JWT {
     type Error = jsonwebtoken::errors::ErrorKind;
 
-    async fn from_request(
-        request: &'a Request<'r>,
-    ) -> request::Outcome<Self, Self::Error> {
+    async fn from_request(request: &'a Request<'r>) -> request::Outcome<Self, Self::Error> {
         let token = match bearer(request) {
             Some(t) => t,
-            None => {
-                return Outcome::Failure((
-                    Status::Unauthorized,
-                    ErrorKind::InvalidToken,
-                ))
-            }
+            None => return Outcome::Failure((Status::Unauthorized, ErrorKind::InvalidToken)),
         };
 
         let decoding_key = match request.guard::<State<Decoding>>().await {
             Outcome::Success(s) => s.hs256.to_owned(),
             _ => {
-                return Outcome::Failure((
-                    Status::InternalServerError,
-                    ErrorKind::__Nonexhaustive,
-                ))
+                return Outcome::Failure((Status::InternalServerError, ErrorKind::__Nonexhaustive))
             }
         };
 

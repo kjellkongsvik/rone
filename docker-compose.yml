@@ -1,0 +1,15 @@
+version: '3.0'
+services:
+  auth:
+    image: lambdaville/no-factor-auth:v0.0.5
+
+  rone:
+    build:
+      context: .
+    ports:
+      - '8080:8080'
+    depends_on:
+      - auth
+    environment:
+      - SECRET_KEY="12345678"
+      - AUTHSERVER=http://auth:8089/common
