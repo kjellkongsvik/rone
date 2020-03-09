@@ -9,7 +9,7 @@ use std::collections::HashMap;
 #[derive(Debug)]
 pub struct Decoding<'a> {
     pub hs256: DecodingKey<'a>,
-    pub rs256: HashMap<String, DecodingKey<'a>>,
+    pub rs256: Option<&'a HashMap<String, DecodingKey<'a>>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

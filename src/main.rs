@@ -19,7 +19,7 @@ fn index(_jwt: JWT) -> String {
 
 fn rocket(
     secret_key: &'static [u8],
-    rsa_keys: HashMap<String, DecodingKey<'static>>,
+    rsa_keys: Option<&'static HashMap<String, DecodingKey<'static>>>,
 ) -> Rocket {
     rocket::ignite()
         .mount("/", routes![index])
@@ -31,21 +31,6 @@ fn rocket(
         }))
 }
 
-// fn tt<'a>() -> HashMap<String, DecodingKey<'a>> {
-//     let t = openid::ten(&env::var("AUTHSERVER").expect("AUTHSERVER in env")).unwrap();
-//     let mut hm = HashMap::new();
-//     for (k, v) in t {
-//         hm.insert(
-//             k,
-//             DecodingKey::from_rsa_components(
-//                 Box::leak(v.0.into_boxed_str()),
-//                 Box::leak(v.1.into_boxed_str()),
-//             ),
-//         );
-//     }
-//     hm
-// }
-
 fn main() -> Result<(), rocket::error::Error> {
     lazy_static! {
         static ref SECRET_KEY: String =
@@ -53,8 +38,7 @@ fn main() -> Result<(), rocket::error::Error> {
         static ref RSA_KEYS: HashMap<String, DecodingKey<'static>> =
             openid::ten(&env::var("AUTHSERVER").expect("AUTHSERVER in env")).unwrap();
     }
-    let hm = HashMap::new();
-    rocket(SECRET_KEY.as_ref(), hm).launch()
+    rocket(SECRET_KEY.as_ref(), Some(&RSA_KEYS)).launch()
 }
 
 #[cfg(test)]
@@ -87,16 +71,14 @@ mod tests {
 
     #[rocket::async_test]
     async fn test_401() {
-        let hm = HashMap::new();
-        let client = Client::new(rocket(secret_key(), hm)).unwrap();
+        let client = Client::new(rocket(secret_key(), None)).unwrap();
         let response = client.get("/").dispatch().await;
         assert_eq!(response.status(), Status::Unauthorized);
     }
 
     #[rocket::async_test]
     async fn test_200() {
-        let hm = HashMap::new();
-        let client = Client::new(rocket(secret_key(), hm)).unwrap();
+        let client = Client::new(rocket(secret_key(), None)).unwrap();
         let response = client
             .get("/")
             .header(Header::new("Authorization", "Bearer ".to_owned() + &jwt()))

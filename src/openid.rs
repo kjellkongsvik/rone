@@ -10,9 +10,10 @@ struct Oid {
 
 #[derive(Debug, Deserialize, PartialEq)]
 struct Keys {
+    alg: String,
+    kty: String,
     e: String,
     n: String,
-    alg: String,
     kid: String,
 }
 
@@ -25,16 +26,13 @@ fn keys<'a, T>(uri: &str) -> Result<T, Error>
 where
     for<'de> T: Deserialize<'de> + 'a,
 {
-    println!("AAAA {}", uri);
     Ok(reqwest::blocking::get(uri)?.json::<T>()?)
 }
 
 pub fn ten<'a>(uri: &str) -> Result<HashMap<String, DecodingKey<'a>>, Error> {
     let mut hm = HashMap::new();
 
-    println!("YYYY {}", uri);
     let re = en(uri)?;
-    println!("XXXX: {:?}", re);
 
     for r in re.iter() {
         hm.insert(
@@ -69,24 +67,29 @@ mod tests {
             .join("/jwks")
             .unwrap();
         let disc_body = format!(r#"{{"jwks_uri": "{}"}}"#, some_uri);
-        let jwk_body = r#"
+        let jwk_body = format!(
+            r#"
             {{
                 "keys": [
                     {{  "alg": "RS256",
                         "kty": "RSA",
                         "e": "AQAB",
-                        "n": "yeNlzlub94Y",
-                        "kid": "NjVBRjY5MDlCMUIwNzU4RTA2QzZFMDQ4QzQ2MDAyQjVDNjk1RTM2Qg",
+                        "n": "really a big int encoded as a string",
+                        "kid": "NjVBRjY5MDlCMUIwNzU4RTA2QzZFMDQ4QzQ2MDAyQjVDNjk1RTM2Qg"
                     }}
                 ]
             }}
-            "#;
+            "#,
+        );
+
+        serde_json::from_str::<Jwk>(&jwk_body).unwrap();
 
         let disc_mock = mock("GET", disc)
             .with_header("content-type", "application/json")
             .with_body(disc_body)
             .expect(1)
             .create();
+
         let jwk_mock = mock("GET", some_uri.path())
             .with_header("content-type", "application/json")
             .with_body(jwk_body)
