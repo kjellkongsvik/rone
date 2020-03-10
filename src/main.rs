@@ -25,7 +25,7 @@ fn rocket(
         .mount("/", routes![index])
         .attach(AdHoc::on_attach("DecodingKey", move |r| {
             Ok(r.manage(Decoding {
-                hs256: DecodingKey::from_secret(secret_key),
+                hs256: Some(DecodingKey::from_secret(secret_key)),
                 rs256: rsa_keys,
             }))
         }))
@@ -35,10 +35,26 @@ fn main() -> Result<(), rocket::error::Error> {
     lazy_static! {
         static ref SECRET_KEY: String =
             env::var("SECRET_KEY").expect("SECRET_KEY in env");
-        static ref RSA_KEYS: HashMap<String, DecodingKey<'static>> =
-            openid::ten(&env::var("AUTHSERVER").expect("AUTHSERVER in env")).unwrap();
+        static ref RSA_COMPONENTS: HashMap<String, DecodingKey<'static>> =
+            openid::get_rsa_components(
+                &env::var("AUTHSERVER").expect("AUTHSERVER in env")
+            )
+            .unwrap()
+            .keys
+            .into_iter()
+            .filter(|k| k.alg == "RS256")
+            .fold(HashMap::new(), |mut hm, r| {
+                hm.insert(
+                    r.kid.clone(),
+                    DecodingKey::from_rsa_components(
+                        Box::leak(r.n.clone().into_boxed_str()),
+                        Box::leak(r.e.clone().into_boxed_str()),
+                    ),
+                );
+                hm
+            });
     }
-    rocket(SECRET_KEY.as_ref(), Some(&RSA_KEYS)).launch()
+    rocket(SECRET_KEY.as_ref(), Some(&RSA_COMPONENTS)).launch()
 }
 
 #[cfg(test)]

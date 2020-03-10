@@ -1,57 +1,33 @@
-use jsonwebtoken::DecodingKey;
 use reqwest::Error;
 use serde::Deserialize;
-use std::collections::HashMap;
 
-#[derive(Debug, Deserialize, PartialEq)]
+pub fn get_rsa_components<'a>(uri: &str) -> Result<Jwk, Error> {
+    Ok(get_json::<Jwk>(&get_json::<Oid>(uri)?.jwks_uri)?)
+}
+
+#[derive(Deserialize)]
 struct Oid {
     jwks_uri: String,
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
-struct Keys {
-    alg: String,
-    kty: String,
-    e: String,
-    n: String,
-    kid: String,
+#[derive(Deserialize)]
+pub struct Keys {
+    pub alg: String,
+    pub e: String,
+    pub n: String,
+    pub kid: String,
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
-struct Jwk {
-    keys: Vec<Keys>,
+#[derive(Deserialize)]
+pub struct Jwk {
+    pub keys: Vec<Keys>,
 }
 
-fn keys<'a, T>(uri: &str) -> Result<T, Error>
+fn get_json<'a, T>(uri: &str) -> Result<T, Error>
 where
     for<'de> T: Deserialize<'de> + 'a,
 {
     Ok(reqwest::blocking::get(uri)?.json::<T>()?)
-}
-
-pub fn ten<'a>(uri: &str) -> Result<HashMap<String, DecodingKey<'a>>, Error> {
-    let mut hm = HashMap::new();
-
-    let re = en(uri)?;
-
-    for r in re.iter() {
-        hm.insert(
-            r.kid.clone(),
-            DecodingKey::from_rsa_components(
-                Box::leak(r.n.clone().into_boxed_str()),
-                Box::leak(r.e.clone().into_boxed_str()),
-            ),
-        );
-    }
-    Ok(hm)
-}
-
-fn en(uri: &str) -> Result<Vec<Keys>, Error> {
-    Ok(keys::<Jwk>(&keys::<Oid>(uri)?.jwks_uri)?
-        .keys
-        .into_iter()
-        .filter(|k| k.alg == "RS256")
-        .collect())
 }
 
 #[cfg(test)]
@@ -60,27 +36,18 @@ mod tests {
     use mockito::{mock, server_url};
 
     #[test]
-    fn e_n() -> Result<(), Error> {
+    fn jku() -> Result<(), Error> {
         let disc = "/.well-known/openid-configuration";
         let some_uri = reqwest::Url::parse(&server_url())
             .unwrap()
             .join("/jwks")
             .unwrap();
         let disc_body = format!(r#"{{"jwks_uri": "{}"}}"#, some_uri);
-        let jwk_body = format!(
-            r#"
-            {{
-                "keys": [
-                    {{  "alg": "RS256",
-                        "kty": "RSA",
+        let jwk_body = r#" { "keys": [ {
+                        "alg": "RS256",
                         "e": "AQAB",
-                        "n": "really a big int encoded as a string",
-                        "kid": "NjVBRjY5MDlCMUIwNzU4RTA2QzZFMDQ4QzQ2MDAyQjVDNjk1RTM2Qg"
-                    }}
-                ]
-            }}
-            "#,
-        );
+                        "n": "actually a big int base 64 encoded as a string",
+                        "kid": "N" } ] } "#;
 
         serde_json::from_str::<Jwk>(&jwk_body).unwrap();
 
@@ -96,13 +63,14 @@ mod tests {
             .expect(1)
             .create();
 
-        let u = &reqwest::Url::parse(&server_url())
-            .unwrap()
-            .join(disc)
-            .unwrap()
-            .to_string();
-        let t = ten(u).unwrap();
-        assert_eq!(t.len(), 1);
+        assert_eq!(
+            get_rsa_components(&(server_url() + disc))?
+                .keys
+                .first()
+                .expect("1 key")
+                .alg,
+            "RS256"
+        );
 
         jwk_mock.assert();
         disc_mock.assert();

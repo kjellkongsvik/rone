@@ -1,5 +1,5 @@
 use jsonwebtoken::errors::ErrorKind;
-use jsonwebtoken::{decode, DecodingKey, Validation};
+use jsonwebtoken::{decode, decode_header, DecodingKey, Validation};
 use rocket::http::Status;
 use rocket::request::{self, FromRequest, Request};
 use rocket::{Outcome, State};
@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Decoding<'a> {
-    pub hs256: DecodingKey<'a>,
+    pub hs256: Option<DecodingKey<'a>>,
     pub rs256: Option<&'a HashMap<String, DecodingKey<'a>>>,
 }
 
@@ -47,6 +47,16 @@ impl<'a, 'r> FromRequest<'a, 'r> for JWT {
             }
         };
 
+        let header = match decode_header(&token) {
+            Ok(h) => h,
+            _ => {
+                return Outcome::Failure((
+                    Status::Unauthorized,
+                    ErrorKind::InvalidToken,
+                ))
+            }
+        };
+
         let decoding_key = match request.guard::<State<Decoding>>().await {
             Outcome::Success(s) => s.hs256.to_owned(),
             _ => {
@@ -57,7 +67,7 @@ impl<'a, 'r> FromRequest<'a, 'r> for JWT {
             }
         };
 
-        match decode::<Claims>(&token, &decoding_key, &Validation::default()) {
+        match decode::<Claims>(&token, &decoding_key.unwrap(), &Validation::default()) {
             Ok(_) => Outcome::Success(JWT(())),
             Err(e) => Outcome::Failure((Status::Unauthorized, e.into_kind())),
         }
