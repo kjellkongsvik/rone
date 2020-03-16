@@ -9,6 +9,11 @@ use std::env;
 extern crate lazy_static;
 
 mod jwt;
+mod slice;
+
+pub mod core {
+    include!(concat!(env!("OUT_DIR"), "/oneseismic.rs"));
+}
 
 #[get("/")]
 fn index(_jwt: JWT) -> String {
