@@ -1,27 +1,36 @@
 #![feature(proc_macro_hygiene, decl_macro)]
+use jsonwebtoken::DecodingKey;
+use jwt::{Decoding, JWT};
 use rocket::fairing::AdHoc;
 use rocket::{get, routes, Rocket};
-use rocket_jwt::{TokenSecret, JWT};
+use std::env;
+
+#[macro_use]
+extern crate lazy_static;
+
+mod jwt;
 
 #[get("/")]
 fn index(_jwt: JWT) -> String {
     "".to_owned()
 }
 
-fn rocket() -> Rocket {
-    rocket::ignite().mount("/", routes![index])
+fn rocket(secret_key: &'static [u8]) -> Rocket {
+    rocket::ignite()
+        .mount("/", routes![index])
+        .attach(AdHoc::on_attach("DecodingKey", move |r| {
+            Ok(r.manage(Decoding {
+                hs256: Some(DecodingKey::from_secret(secret_key)),
+            }))
+        }))
 }
 
 fn main() -> Result<(), rocket::error::Error> {
-    rocket()
-        .attach(AdHoc::on_attach("TokenSecret", |r| {
-            let token_val = match r.config().get_string("token_secret") {
-                Ok(t) => t,
-                _ => return Err(r),
-            };
-            Ok(r.manage(TokenSecret(token_val)))
-        }))
-        .launch()
+    lazy_static! {
+        static ref SECRET_KEY: String =
+            env::var("SECRET_KEY").expect("SECRET_KEY in env");
+    }
+    rocket(SECRET_KEY.as_ref()).launch()
 }
 
 #[cfg(test)]
@@ -29,12 +38,15 @@ mod tests {
     use super::*;
     use jsonwebtoken::Header as jwtHeader;
     use jsonwebtoken::{encode, EncodingKey};
+    use jwt::Claims;
     use rocket::http::{Header, Status};
     use rocket::local::Client;
-    use rocket_jwt::Claims;
 
-    fn secret_key() -> String {
-        "very_secret".to_string()
+    fn secret_key() -> &'static [u8] {
+        lazy_static! {
+            static ref SECRET_KEY: String = "very_secret".to_string();
+        }
+        SECRET_KEY.as_ref()
     }
 
     fn jwt() -> String {
@@ -44,27 +56,26 @@ mod tests {
         encode(
             &jwtHeader::default(),
             &my_claims,
-            &EncodingKey::from_secret(secret_key().as_ref()),
+            &EncodingKey::from_secret(secret_key()),
         )
         .unwrap()
     }
 
-    fn manage_token_secret() -> AdHoc {
-        AdHoc::on_attach("TokenSecret", |r| Ok(r.manage(TokenSecret(secret_key()))))
-    }
-
     #[rocket::async_test]
     async fn test_401() {
-        let client = Client::new(rocket().attach(manage_token_secret())).unwrap();
+        let client = Client::new(rocket(secret_key())).unwrap();
         let response = client.get("/").dispatch().await;
         assert_eq!(response.status(), Status::Unauthorized);
     }
 
     #[rocket::async_test]
     async fn test_200() {
-        let header = Header::new("Authorization", jwt());
-        let client = Client::new(rocket().attach(manage_token_secret())).unwrap();
-        let response = client.get("/").header(header).dispatch().await;
+        let client = Client::new(rocket(secret_key())).unwrap();
+        let response = client
+            .get("/")
+            .header(Header::new("Authorization", "Bearer ".to_owned() + &jwt()))
+            .dispatch()
+            .await;
         assert_eq!(response.status(), Status::Ok);
     }
 }
